@@ -22,8 +22,11 @@ FROM trump
 ORDER BY trump.id, card_set.type, card_set.number;
 
 -- mysql
--- trumpはPostgreSQLからCSVで取り込む
--- trumpをベースにcardを作る
+-- https://github.com/gabfl/mysql_generate_series/blob/main/sql/generate_series.sql これを使う
+CALL generate_series(1, 100000, 1);
+DESC series_tmp;
+
+INSERT INTO trump (id) SELECT null FROM series_tmp;
 
 INSERT INTO card  (trump_id, type, number)
 WITH RECURSIVE sequence AS (
