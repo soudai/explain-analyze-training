@@ -21,8 +21,6 @@ FROM trump
          LEFT JOIN card_set on 1 = 1
 ORDER BY trump.id, card_set.type, card_set.number;
 
-SELECT count(*) FROM card;
-
 -- mysql
 -- trumpはPostgreSQLからCSVで取り込む
 -- trumpをベースにcardを作る
@@ -42,6 +40,3 @@ SELECT trump.id, card_set.type, card_set.number
 FROM trump
          LEFT JOIN card_set on 1 = 1
 ORDER BY trump.id, card_set.type, card_set.number;
-
-
-SELECT * FROM card limit 10;
