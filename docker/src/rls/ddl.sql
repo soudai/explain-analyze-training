@@ -1,3 +1,8 @@
+-- schema and extension setup
+create schema if not exists demo;
+create extension if not exists pgcrypto;
+set search_path to demo, public;
+
 create table if not exists company
 (
     id         uuid                     default gen_random_uuid() not null
@@ -34,12 +39,12 @@ create table if not exists organization_chart
             references organization
 );
 
-create table if not exists user
+create table if not exists users
 (
     id         uuid                     default gen_random_uuid() not null
         primary key,
     created_at timestamp with time zone default now()             not null,
-    name       text                                               not null,
+    name       text                                               not null
 );
 
 create table if not exists staff
@@ -49,7 +54,7 @@ create table if not exists staff
     created_at timestamp with time zone default now()             not null,
     user_id    uuid not null
         constraint staff_user_id_fk
-            references user,
+            references users,
     organization_id uuid not null
         constraint staff_organization_id_fk
             references organization
@@ -62,7 +67,7 @@ create table if not exists admin
     created_at timestamp with time zone default now()             not null,
     user_id    uuid not null
         constraint admin_user_id_fk
-            references user,
+            references users
 );
 
 create table if not exists rls_key
@@ -70,8 +75,8 @@ create table if not exists rls_key
     id         uuid                     default gen_random_uuid() not null
         primary key,
     created_at timestamp with time zone default now()             not null,
-    key        uuid                                               not null,
-)
+    key        uuid                                               not null
+);
 
 create table if not exists rls_company_group
 (
