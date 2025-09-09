@@ -43,7 +43,7 @@ lc_monetary | C | user
 lc_numeric | C | user
 lc_time | C | user
 
-mydb=# SHOW client_encoding;
+mydb=# SHOW clie    nt_encoding;
 ```
 
 大きな注意点としてエンコードとロケールは必ず設定するようにしましょう。
@@ -97,7 +97,25 @@ RDSｎ場合は、自然と設定されているので、特に意識する必�
 # DDL
 MySQLとPostgreSQLのDDLにはいくつかの違いがあります。以下に主要な違いを示します。
 
+todo: 文字列型の大文字小文字の違い
+todo: バイナリの違い
+todo: 日付時刻の違い
+todo: JSONの違い
 ## 型の違い
+| 概念/用途 | PostgreSQL                                                                                        | MySQL                                                                         | 違い・注意点                                                                                                                     |                                                                        |
+| ----- | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| 整数    | `SMALLINT` (2B)<br>`INTEGER`/`INT` (4B)<br>`BIGINT` (8B)                                          | `SMALLINT` (2B)<br>`INT`/`INTEGER` (4B)<br>`BIGINT` (8B)                      | サイズと範囲はほぼ同じ。MySQL の `UNSIGNED` は PostgreSQL には無い。代替は `CHECK (col >= 0)` 制約。                                                |                                                                        |
+| 自動採番  | \`GENERATED {BY DEFAULT                                                                           | ALWAYS} AS IDENTITY`（推奨）<br>`SERIAL`/`BIGSERIAL\`（古い書き方）                      | `AUTO_INCREMENT`                                                                                                           | PostgreSQL は **独立シーケンス**で管理し標準SQL準拠。MySQL はテーブルごとのカウンタ。Postgres の方が柔軟。 |
+| 小数    | `NUMERIC(p,s)` / `DECIMAL(p,s)`（任意精度）<br>`REAL` (4B, IEEE) <br>`DOUBLE PRECISION` (8B, IEEE)      | `DECIMAL(p,s)`（任意精度）<br>`FLOAT(p)` (近似, 4/8B)<br>`DOUBLE` / `REAL` (8B, IEEE) | PostgreSQL の `NUMERIC` は厳密精度、`REAL/DOUBLE` はIEEE。MySQL の `FLOAT(M,D)` は古い表記で廃止推奨。                                          |                                                                        |
+| 文字列   | `CHAR(n)`<br>`VARCHAR(n)`<br>`TEXT`                                                               | `CHAR(n)`<br>`VARCHAR(n)`<br>`TEXT`                                           | PostgreSQL は `TEXT` に長さ制限なし（実用上 `VARCHAR` と差なし）。MySQL は `TEXT` にサイズ区分（TINYTEXT/ TEXT/ MEDIUMTEXT/ LONGTEXT）。               |                                                                        |
+| バイナリ  | `BYTEA`                                                                                           | `BLOB`（TINY/MEDIUM/LONG 区分あり）                                                 | PostgreSQL は1種類で管理。MySQL は用途ごとにサイズ別。                                                                                       |                                                                        |
+| 日付/時刻 | `DATE`<br>`TIME [WITHOUT/ WITH TIME ZONE]`<br>`TIMESTAMP [WITHOUT/ WITH TIME ZONE]`<br>`INTERVAL` | `DATE`<br>`TIME`<br>`DATETIME`<br>`TIMESTAMP`                                 | PostgreSQL の `TIMESTAMP WITH TIME ZONE` は実際には **UTC変換＋TZ情報保持**。MySQL の `TIMESTAMP` は常に UTC に変換して保存。`INTERVAL` は MySQL 非対応。 |                                                                        |
+| 論理値   | `BOOLEAN`（実体は `true/false`）                                                                       | `BOOLEAN`（実体は `TINYINT(1)`）                                                   | PostgreSQL は真の論理型。MySQL は整数で代替。                                                                                            |                                                                        |
+| JSON  | `JSON` / `JSONB`                                                                                  | `JSON`                                                                        | PostgreSQL の `JSONB` は**バイナリ格納＋索引最適化可能**。MySQL の `JSON` は文字列格納＋関数群。Postgres の方が検索演算子や索引が豊富。                                |                                                                        |
+| UUID  | `UUID`                                                                                            | `CHAR(36)` などで代替（MySQL 8.0.19 以降 `UUID()` 関数あり）                               | PostgreSQL は専用型を持ち、格納効率・演算子あり。MySQL は文字列やバイナリで実装。                                                                          |                                                                        |
+| 配列    | `integer[]` など **配列型**あり                                                                          | 非対応                                                                           | PostgreSQL 独自の強力機能。MySQL は正規化か JSON で代替。                                                                                   |                                                                        |
+| 列挙    | `ENUM`（型定義）                                                                                       | `ENUM`（列ごとに定義）                                                                | PostgreSQL の `ENUM` は型オブジェクトとして再利用可能。MySQL は列ごとに閉じた定義。                                                                     |                                                                        |
+| 範囲    | `int4range`, `tsrange`, `tstzrange`, `daterange` など                                               | 非対応                                                                           | PostgreSQL 独自。予約や期間検索に有用。MySQL は BETWEEN などで代替。                                                                            |                                                                        |
 
 ## idの指定
 MySQLのAUTO_INCREMENTに相当するものとして、PostgreSQLではSERIAL型やIDENTITY型があります。
@@ -122,9 +140,9 @@ CREATE TABLE strict_users (
 -- ALWAYS … 原則、常に自動採番。手動値は不可（ただし OVERRIDING SYSTEM VALUE を明示した場合のみ受け入れ）
 ```
 
-IDENTITY型については、日本語では識別型と翻訳されており、公式ドキュメントでは識別型になっています。
+IDENTITY型については、日本語では識別列と翻訳されており、公式ドキュメントでは識別列になっています。
 MySQLとは違う大きな特徴の一つなのでドキュメントをチェックしておきましょう。
-[PostgreSQL 識別型](https://www.postgresql.jp/docs/current/ddl-identity-columns.html)
+[PostgreSQL 識別列](https://www.postgresql.jp/docs/17/ddl-identity-columns.html)
 
 ## ALTERの違い
 
