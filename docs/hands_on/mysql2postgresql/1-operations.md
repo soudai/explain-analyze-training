@@ -6,7 +6,6 @@
 1. DDL
 1. インデックス
 1. JSON型
-1. レプリケーション
 1. ユーザと権限
 1. バックアップとリストア
 
@@ -98,25 +97,7 @@ RDSｎ場合は、自然と設定されているので、特に意識する必�
 # DDL
 MySQLとPostgreSQLのDDLにはいくつかの違いがあります。以下に主要な違いを示します。
 
-## CREATE INDEX CONCURRENTLY
-PostgreSQLでは、インデックスを作成する際に`CONCURRENTLY`オプションを使用することで、テーブルのロックを最小限に抑えながらインデックスを作成できます。これにより、インデックス作成中もテーブルへの読み書きが可能です。
-
-```sql
--- 書き込みを止めずに作る（失敗してもテーブルはそのまま）
-CREATE INDEX CONCURRENTLY idx_orders_created_at
-  ON orders (created_at);
-
--- 併走DDLの可視化（作成中の未VALIDなindex監視）
-SELECT schemaname, tablename, indexname, indisvalid
-FROM pg_indexes AS i
-JOIN pg_class   AS c   ON c.relname = i.indexname
-JOIN pg_index   AS idx ON idx.indexrelid = c.oid
-WHERE NOT idx.indisvalid;
-```
-
-CREATE INDEX CONCURRENTLYはロックをとらないというメリットの反面、テーブルスキャンを2回行うため、通常のCREATE INDEXよりも時間がかかります。インデックス作成時に追加されたデータを後から反映させるために、2回目のスキャンが必要になるためです。
-またインデックス作成中にDDLが走ると失敗することがありますし、データの更新量が多いと作成が追い付かず、失敗することがあります。
-そのため、インデックス作成中に大量の更新が発生することが予想される場合は、メンテナンスウィンドウを設けて、ロックを取った通常のCREATE INDEXを使用するか、新たなテーブルやカラムを追加して、インデックスを作成し、データを移行する方法を検討してください。
+## 型の違い
 
 ## idの指定
 MySQLのAUTO_INCREMENTに相当するものとして、PostgreSQLではSERIAL型やIDENTITY型があります。
@@ -145,3 +126,82 @@ IDENTITY型については、日本語では識別型と翻訳されており、
 MySQLとは違う大きな特徴の一つなのでドキュメントをチェックしておきましょう。
 [PostgreSQL 識別型](https://www.postgresql.jp/docs/current/ddl-identity-columns.html)
 
+## ALTERの違い
+
+`ALTER` 構文に関してもMySQLとPostgreSQLではいくつかの違いがあります。
+
+多少の構文の違いはありますが、基本的な操作は同様で、カラムの追加、削除、変更や、テーブルの名前変更などが可能です。
+
+まず、MySQLではカラム単位で文字コードを指定できますが、PostgreSQLではデータベース単位できまり、あとから変更できません。
+
+またロック範囲が大きく違い、MySQLのオンラインDDLのような書き込み可能なDDLはPostgreSQLにはなく、手順の工夫などで最小化することはできますが、最終的なロックは避けられません。
+ロックの流動を最小化する手順の例については他社の事例をご覧ください。
+
+- [令和最新版: PostgreSQLの安全なSET NOT NULL](https://www.wantedly.com/companies/wantedly/post_articles/433252)
+- [PostgreSQLで安全にテーブル定義を変更する](https://techblog.lclco.com/entry/2018/01/24/070000)
+- [ALTER TABLEの各コマンドのロックレベル](https://masahikosawada.github.io/2023/05/08/Lock-Levels-Of-ALTER-TABLE/)
+  - このブログはPostgreSQL 15までの情報ですが、PostgreSQL17まででも大きな変更はありません。
+
+# インデックス
+MySQLとPostgreSQLのインデックスにはいくつかの違いがあります
+
+## CREATE INDEX CONCURRENTLY
+PostgreSQLでは、インデックスを作成する際に`CONCURRENTLY`オプションを使用することで、テーブルのロックを最小限に抑えながらインデックスを作成できます。これにより、インデックス作成中もテーブルへの読み書きが可能です。
+
+```sql
+-- 書き込みを止めずに作る（失敗してもテーブルはそのまま）
+CREATE INDEX CONCURRENTLY idx_orders_created_at
+  ON orders (created_at);
+
+-- 併走DDLの可視化（作成中の未VALIDなindex監視）
+SELECT schemaname, tablename, indexname, indisvalid
+FROM pg_indexes AS i
+JOIN pg_class   AS c   ON c.relname = i.indexname
+JOIN pg_index   AS idx ON idx.indexrelid = c.oid
+WHERE NOT idx.indisvalid;
+```
+
+CREATE INDEX CONCURRENTLYはロックをとらないというメリットの反面、テーブルスキャンを2回行うため、通常のCREATE INDEXよりも時間がかかります。インデックス作成時に追加されたデータを後から反映させるために、2回目のスキャンが必要になるためです。
+またインデックス作成中にDDLが走ると失敗することがありますし、データの更新量が多いと作成が追い付かず、失敗することがあります。
+そのため、インデックス作成中に大量の更新が発生することが予想される場合は、メンテナンスウィンドウを設けて、ロックを取った通常のCREATE INDEXを使用するか、新たなテーブルやカラムを追加して、インデックスを作成し、データを移行する方法を検討してください。
+
+## インデックスの種類
+PostgreSQLでは、B-treeインデックスの他に、Hashインデックス、GINインデックス、GiSTインデックス、BRINインデックスなど、さまざまな種類のインデックスが利用できます。これにより、特定のクエリパターンに最適化されたインデックスを作成できます。
+
+## インデックスのメンテナンス
+PostgreSQLでは、追記型の特性上、MySQLよりも断片化が起こりやすいという課題があります。
+テーブルの更新が頻繁に行われる場合、インデックスの断片化が発生し、パフォーマンスが低下することがあります。
+その際には`REINDEX`コマンドを使用してインデックスを再構築することで改善します。
+類似の例で
+
+## インデックスの確認
+PostgreSQLでは、`pg_indexes`ビューを使用して、データベース内のインデックスを確認できます。  
+
+# JSON型
+MySQLのJSON型とPostgreSQLのJSON型にはいくつかの違いがあります。
+## JSON型とJSONB型
+- todo : あとで書く
+## JSON関数と演算子
+- todo : あとで書く
+
+# ユーザと権限
+MySQLとPostgreSQLのユーザ管理と権限付与にはいくつかの違いがあります。
+
+## ユーザの作成
+
+- [PostgreSQLの権限管理 ～ アカウントの操作とRow Level Securityの活用 ～ / pgcon2022-tutorial](https://speakerdeck.com/soudai/pgcon2022-tutorial)
+- [PostgreSQLのロール管理とその注意点（Open Source Conference 2022 Online/Osaka 発表資料）](https://www.slideshare.net/nttdata-tech/postgresql-roles-osc2022-online-osaka-nttdata)
+- [PostgreSQLのロール](https://qiita.com/nuko_yokohama/items/085b75ee4c0938936ab9)
+- [公式ドキュメント:PostgreSQLの権限管理](https://www.postgresql.jp/document/current/html/user-manag.html)
+- [事前定義ロール（旧：デフォルトロール）](https://www.postgresql.jp/docs/17/predefined-roles.html)
+
+# バックアップとリストア
+
+- [PostgreSQLバックアップ基礎講座](https://www.sraoss.co.jp/wp-content/uploads/files/event_seminar/material/2024/OSC_SRAOSS_Backup_20240301_v2.pdf)
+- [技術を知る：PostgreSQLのバックアップとリカバリー ～大量データの高速バックアップ～｜PostgreSQLインサイド](https://www.fujitsu.com/jp/products/software/resources/feature-stories/postgres/highspeed-backup/)
+- [【Part1】PostgreSQLバックアップ基礎講座 ～ PostgreSQLのバックアップ手法 ～](https://www.youtube.com/watch?v=u_ky6US7FXo)
+- [【Part2】PostgreSQLバックアップ基礎講座 ～ 論理バックアップ・物理バックアップ ～](https://www.youtube.com/watch?v=dFRnmZezJz8)
+- [【T1】PostgreSQLバックアップ実践とバックアップ管理ツールの紹介](https://www.youtube.com/watch?v=aQo0IFjiTuM)
+
+## PTIR
+- [PostgreSQLの周辺ツール ～ pg_rmanでバックアップ・リカバリーを管理する ～](https://www.fujitsu.com/jp/products/software/resources/feature-stories/postgres/pgrman/)
