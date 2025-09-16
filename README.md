@@ -17,9 +17,9 @@
 - https://nippondanji.blogspot.com/2009/03/mysqlexplain.html
 
 # PostgreSQLの実行計画
+- [EXPLAINを使ったPostgreSQLのクエリ最適化の基本と実践](https://speakerdeck.com/keiko713/explain-explain)
 - [PostgreSQLカンファレンス 2014 SQLチューニング入門 入門編](https://www.youtube.com/watch?v=gxsBi-6ub3k)
-- SQLチューニング入門 実践編
-  - https://www.youtube.com/watch?v=ptUd33kZ3-o
+- [SQLチューニング入門 実践編](https://www.youtube.com/watch?v=ptUd33kZ3-o)
 - 動画 [PostgreSQLカンファレンス 2018 SQL チューニングの基礎](https://www.youtube.com/watch?v=Bc0kIGHqjFk)
 - 資料 [PostgreSQLカンファレンス 2018 SQL チューニングの基礎](https://www.postgresql.jp/sites/default/files/2024-04/T3_pg_sql_tuning_basic_20181122.pdf)
 
