@@ -139,6 +139,8 @@ MySQLとPostgreSQLの大きな違いの中にパラレルクエリのサポー�
 
 - [パラレルクエリ](https://www.postgresql.jp/document/17/html/parallel-query.html)
 
+![parallel-query](img/parallel-query.png)
+
 ```sql
 EXPLAIN SELECT * FROM pgbench_accounts WHERE filler LIKE '%x%';
                                      QUERY PLAN
