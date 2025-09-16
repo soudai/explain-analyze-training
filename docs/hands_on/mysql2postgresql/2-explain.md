@@ -158,4 +158,14 @@ EXPLAIN SELECT * FROM pgbench_accounts WHERE filler LIKE '%x%';
 例えば、NLJで結合している場合、JOINの片方が大きなテーブルであればパラレルクエリを使ってくれますが、両方とも小さなテーブルであればパラレルクエリを使ってくれないケースが多く、Hash Joinであれば両方とも大きなテーブルであってもパラレルクエリを使って改善するケースがあります。
 
 # パーテーション
-かけたら書く
+パーテーションはMySQLに対しPostgreSQLは後発ですが、昨今では強力な機能を多数備えています。
+
+[パーティショニングの概要](https://www.fujitsu.com/jp/products/software/resources/feature-stories/postgres/article-index/partitioning-overview/)
+
+[パーティショニングにおける性能向上のしくみ](https://www.fujitsu.com/jp/products/software/resources/feature-stories/postgres/article-index/partitioning-performanceup/)
+
+PostgreSQLとMySQLのパーテーションで大きな違いの一つに外部キー制約があります。
+MySQLではパーテーションをまたいだ外部キー制約をサポートしていませんが、PostgreSQLではパーテーションをまたいだ外部キー制約をサポートしています。
+
+パーテーションは外部キー制約の子にも親にもなることができますが、子になる場合は外部キー制約だけではインデックスを作成しないため、パフォーマンスに注意が必要です。
+パーテーションはレコードが増える前提で設計するため、外部キー制約の子に設定する場合は、外部キー制約の対象の列に対してインデックスを作成することを忘れないようにしましょう。
