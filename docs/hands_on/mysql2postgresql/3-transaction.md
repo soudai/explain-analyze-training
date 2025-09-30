@@ -9,7 +9,6 @@
 
 - [トランザクション分離レベルのケースと対応方法](https://christina04.hatenablog.com/entry/transaction-isolation-level)
 - [トランザクション分離レベルの古典的論文 A Critique of ANSI SQL Isolation Levels を読む](https://developer.hatenastaff.com/entry/2017/06/21/100000)
-- [PostgreSQLのread committed時におけるUPDATEの挙動について](https://soudai.hatenablog.com/entry/2022/07/03/223915)
 
 ---
 
@@ -26,6 +25,13 @@ SQL標準の4つの分離レベル
 
 引用元 : [公式ドキュメント:トランザクションの分離](https://www.postgresql.jp/document/current/html/transaction-iso.html)
 
+
+一度は読んだ方が良い資料
+- [WHERE 条件のフィールドを UPDATE するのって，明示的にロックしてなくても安全？全パターン調べてみました！](https://qiita.com/mpyw/items/14925c499b689a0cbc59?utm_campaign=post_article&utm_medium=twitter&utm_source=twitter_share)
+- [MySQL/Postgres におけるトランザクション分離レベルと発生するアノマリーを整理する](https://zenn.dev/mpyw/articles/rdb-transaction-isolations)
+
+合わせて読みたい
+- [排他制御のためだけに Redis 渋々使ってませんか？データベース単独でアドバイザリーロックできるよ！](https://zenn.dev/mpyw/articles/rdb-advisory-locks)
 ## PostgreSQL と MySQL の違い
 
 PostgreSQLはデフォルトが READ COMMITTED。
@@ -38,13 +44,7 @@ MySQLにはギャップロックがあるが、PostgreSQLにはギャップロ�
 SHOW default_transaction_isolation;
 ```
 
-## READ COMMITTED (再読で値が変わる)
-
-todo : ファジーリードとファントムリードを確認する手順を記載する
-
-## REPEATABLE READ
-
-todo : ファジーリードとファントムリードを確認する手順を記載する
+- [PostgreSQLのread committed時におけるUPDATEの挙動について](https://soudai.hatenablog.com/entry/2022/07/03/223915)
 
 # 2. ロックの種類
 
@@ -182,9 +182,12 @@ SELECT now(); ALTER TABLE accounts ADD COLUMN note TEXT; SELECT now();
 
 ## 4. 外部キー制約とロック
 
-親行参照時: 親に KEY SHARE。子側 FK 列にインデックスが無いと全表スキャンで競合増。
+PostgreSQLは外部キー制約を設定しても子テーブル側にインデックスを自動作成しないため、子テーブル側にインデックスが無いと親テーブルの更新時にテーブルスキャンが発生し、ロック競合が増大します。
+特に親テーブルに対する範囲の広い更新や削除が発生する場合、子テーブルにインデックスが無いと親テーブルの更新や削除が非常に遅くなります。
 
-セットアップ:
+MySQLには制約の無効化 (SET FOREIGN_KEY_CHECKS=0) がありますが、PostgreSQLにはありません。
+代わりに遅延制約を設定することができ、コミット時に一括検証することができます。
+ただし、遅延制約はあとから変更することができず、対象の制約作成時に指定する必要があり、デフォルトでは即時検証 (IMMEDIATE) になるため、自覚的に遅延制約を設定する必要があります。
 
 ```sql
 DROP TABLE IF EXISTS payments CASCADE;
