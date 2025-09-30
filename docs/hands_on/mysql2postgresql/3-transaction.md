@@ -30,8 +30,9 @@ SQL標準の4つの分離レベル
 - [WHERE 条件のフィールドを UPDATE するのって，明示的にロックしてなくても安全？全パターン調べてみました！](https://qiita.com/mpyw/items/14925c499b689a0cbc59?utm_campaign=post_article&utm_medium=twitter&utm_source=twitter_share)
 - [MySQL/Postgres におけるトランザクション分離レベルと発生するアノマリーを整理する](https://zenn.dev/mpyw/articles/rdb-transaction-isolations)
 
-合わせて読みたい
+アドバイザリーロックについても合わせて読みたい
 - [排他制御のためだけに Redis 渋々使ってませんか？データベース単独でアドバイザリーロックできるよ！](https://zenn.dev/mpyw/articles/rdb-advisory-locks)
+
 ## PostgreSQL と MySQL の違い
 
 PostgreSQLはデフォルトが READ COMMITTED。
@@ -55,6 +56,40 @@ SHOW default_transaction_isolation;
 | 排他ロック (eXcluded lock) | ロック対象へのすべてのアクセスを禁止する | SELECT, INSERT, UPDATE, DELETE、すべて実行できない<br>書き込みロック、X lockと呼ばれることもある |
 | 共有ロック (Shared lock) | ロック対象への参照以外のアクセスを禁止する | ほかのトランザクションから参照 (SELECT) でアクセス可能<br>読み込みロック、S lockと呼ばれることもある |
 
+PostgreSQLのロックのモード
+
+| 要求するロックモード | ACCESS SHARE | ROW SHARE | ROW EXCLUSIVE. | SHARE UPDATE EXCLUSIVE. | SHARE | SHARE ROW EXCLUSIVE. | EXCLUSIVE. | ACCESS EXCLUSIVE. |
+|---------------------|-------------|-----------|-----------|-------------------|-------|-----------------|-------|-------------|
+| ACCESS SHARE        |             |           |           |                   |       |                 |       | X           |
+| ROW SHARE           |             |           |           |                   |       |                 | X     | X           |
+| ROW EXCL.           |             |           |           |                   | X     | X               | X     | X           |
+| SHARE UPDATE EXCL.  |             |           |           | X                 | X     | X               | X     | X           |
+| SHARE               |             |           | X         | X                 |       | X               | X     | X           |
+| SHARE ROW EXCL.     |             |           | X         | X                 | X     | X               | X     | X           |
+| EXCL.               |             | X         | X         | X                 | X     | X               | X     | X           |
+| ACCESS EXCL.        | X           | X         | X         | X                 | X     | X               | X     | X           |
+
+※ 表中のXはロックモード間で競合することを示します
+
+| 要求するロックモード | FOR KEY SHARE | FOR SHARE | FOR NO KEY UPDATE | FOR UPDATE |
+|---------------------|---------------|-----------|-------------------|------------|
+| FOR KEY SHARE       |               |           |                   | X          |
+| FOR SHARE           |               |           | X                 | X          |
+| FOR NO KEY UPDATE   |               | X         | X                 | X          |
+| FOR UPDATE          | X             | X         | X                 | X          |
+
+※ 表中のXはロックモード間で競合することを示します
+
+
+引用元 : [公式ドキュメント:ロックモードの互換性](https://www.postgresql.jp/document/current/html/explicit-locking.html#TABLE-LOCK-COMPATIBILITY）
+
+## ページロック
+MySQLのInnoDBストレージエンジンには、メタデータロックがあるが、PostgreSQLにも同様にページロックがあります。
+
+> テーブルと行ロックに加え、ページレベルの共有/排他ロックがあり、これらは共有バッファプールにあるテーブルページへの読み書きのアクセスを管理するために使用されます。 これらのロックは、行が取得された後や更新された後に即座に解除されます。 アプリケーション開発者は通常ページレベルロックを考慮する必要はありませんが、ロックについて全てを説明したかったためここで取り上げました。
+>
+引用元： [公式ドキュメント:ページロック](https://www.postgresql.jp/document/current/html/explicit-locking.html#LOCKING-PAGES)
+
 ## 主なロックの粒度
 
 | 種類 | 内容 | 補足 |
@@ -64,13 +99,9 @@ SHOW default_transaction_isolation;
 
 ## 行ロックの取得
 
+行ロックの種類
 | 句 | 意味 | 主な競合 | 備考 |
 |----|------|----------|------|
-| FOR UPDATE | 更新予定行の排他 | FOR UPDATE/NO KEY UPDATE | 最頻出 |
-| FOR NO KEY UPDATE | PK/Unique を変えない更新 | FOR UPDATE/NO KEY UPDATE | UPDATE 内部利用 |
-| FOR SHARE | 共有参照 | FOR UPDATE 系 | 読み + 整合参照 |
-| FOR KEY SHARE | FK 参照保護 | FOR UPDATE | 親行参照維持 |
-
 ## skip locked
 
 ```sql
@@ -158,27 +189,8 @@ WHERE relation IS NOT NULL;
 
 ## 3. ALTER (DDL) のロック
 
-| 操作 | ロック影響 (概念) | 備考 |
-|------|------------------|------|
-| ADD COLUMN (NULL) | メタデータのみ | 高速 |
-| ADD COLUMN NOT NULL DEFAULT (v14+) | 多くはメタのみ | 旧版は全行書換注意 |
-| SET NOT NULL | 全行検証 | 大量行は段階移行 |
-| TYPE 変更 (USING) | 行再書き出し | 所要時間計測必須 |
+[ALTER TABLEの各コマンドのロックレベル](https://masahikosawada.github.io/2023/05/08/Lock-Levels-Of-ALTER-TABLE/)
 
-段階的 NOT NULL 手順:
-
-1. 列追加 (NULL 可)
-2. バックフィル (バッチ更新)
-3. 残 NULL 数確認
-4. `ALTER TABLE ... SET NOT NULL`
-
-小テスト (経過差を見る例):
-
-```sql
-SELECT now(); ALTER TABLE accounts ADD COLUMN note TEXT; SELECT now();
-```
-
----
 
 ## 4. 外部キー制約とロック
 
@@ -207,8 +219,6 @@ CREATE TABLE payments (
 
 CREATE INDEX ON payments(order_id); -- 子側 FK index
 ```
-
-参照ロック観察:
 
 セッションA:
 
