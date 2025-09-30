@@ -80,7 +80,6 @@ PostgreSQLのロックのモード
 
 ※ 表中のXはロックモード間で競合することを示します
 
-
 引用元 : [公式ドキュメント:ロックモードの互換性](https://www.postgresql.jp/document/current/html/explicit-locking.html#TABLE-LOCK-COMPATIBILITY）
 
 ## ページロック
@@ -89,6 +88,42 @@ MySQLのInnoDBストレージエンジンには、メタデータロックがあ
 > テーブルと行ロックに加え、ページレベルの共有/排他ロックがあり、これらは共有バッファプールにあるテーブルページへの読み書きのアクセスを管理するために使用されます。 これらのロックは、行が取得された後や更新された後に即座に解除されます。 アプリケーション開発者は通常ページレベルロックを考慮する必要はありませんが、ロックについて全てを説明したかったためここで取り上げました。
 >
 引用元： [公式ドキュメント:ページロック](https://www.postgresql.jp/document/current/html/explicit-locking.html#LOCKING-PAGES)
+
+補足として、PostgreSQLもMySQLと同様にSKIP LOCKEDやNOWAITが利用できます。
+
+| オプション           | 動作            | 戻り値        |
+| --------------- | ------------- | ---------- |
+| **通常**          | ロックが解放されるまで待つ | 行を返す       |
+| **NOWAIT**      | 即時エラーを返す      | エラー発生      |
+| **SKIP LOCKED** | ロック中の行を無視する   | 取得できる行のみ返す |
+
+
+```sql
+-- キューとして利用するtasksテーブル
+BEGIN;
+SELECT id, payload
+FROM tasks
+WHERE status = 'pending'
+FOR UPDATE SKIP LOCKED
+LIMIT 10;
+
+-- 取得したタスクを処理して完了に更新
+UPDATE tasks SET status = 'done' WHERE id = ANY(...);
+COMMIT;
+```
+
+```sql
+-- セッション1
+BEGIN;
+UPDATE accounts SET balance = balance - 100 WHERE id = 1;
+-- この時点で id=1 の行はロックされている
+
+-- セッション2
+BEGIN;
+SELECT * FROM accounts WHERE id = 1 FOR UPDATE NOWAIT;
+-- → 他セッションがロック中なので、すぐにエラー:
+-- ERROR:  could not obtain lock on row in relation "accounts"
+```
 
 ## 主なロックの粒度
 
