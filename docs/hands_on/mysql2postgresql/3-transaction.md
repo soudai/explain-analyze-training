@@ -1,112 +1,68 @@
-# 3. トランザクションとロック (Hands-on)
-
-本ハンズオンは以下の必須 4 項目だけを最短で「手を動かして」理解するためのミニマル版です。不要な周辺概念 (Vacuum / MVCC 深堀り / デッドロック総論 など) は除外しています。
-
-対象 (必須 4 項目):
+# トランザクションとロック
 
 1. トランザクション分離レベル
 2. ロックの種類 (行 / テーブル代表モード)
 3. ALTER (DDL) が取得するロック
 4. 外部キー制約とロック挙動
 
-推奨: 2 つの psql セッション (A/B) を横に並べて「待ち」「競合」「即時エラー」を観察。
+# おすすめ参考記事
 
-セットアップ (最初に 1 回実行):
-
-```sql
-CREATE SCHEMA IF NOT EXISTS txlab;
-SET search_path = txlab, public;
-
-DROP TABLE IF EXISTS accounts CASCADE;
-CREATE TABLE accounts (
-  id       SERIAL PRIMARY KEY,
-  name     TEXT    NOT NULL,
-  balance  INTEGER NOT NULL DEFAULT 0
-);
-INSERT INTO accounts(name, balance) VALUES
-  ('alice',100),('bob',50),('carol',0);
-```
+- [トランザクション分離レベルのケースと対応方法](https://christina04.hatenablog.com/entry/transaction-isolation-level)
+- [トランザクション分離レベルの古典的論文 A Critique of ANSI SQL Isolation Levels を読む](https://developer.hatenastaff.com/entry/2017/06/21/100000)
+- [PostgreSQLのread committed時におけるUPDATEの挙動について](https://soudai.hatenablog.com/entry/2022/07/03/223915)
 
 ---
 
-## 1. トランザクション分離レベル
+# 1. トランザクション分離レベル
 
-PostgreSQL デフォルトは READ COMMITTED (各文で最新コミットを読む)。
+SQL標準の4つの分離レベル
 
-| レベル | 特徴 | 防げる主な現象 | 注意点 |
-|--------|------|----------------|--------|
-| READ COMMITTED | 各文で最新 snapshot | ダーティリード | 再 SELECT で値が変わる |
-| REPEATABLE READ | 開始時 snapshot 固定 | Non-repeatable read | 幻影は起こり得る |
-| SERIALIZABLE | SSI 競合検出 | 幻影 / 書込スキュー | 40001 をリトライ |
+| 分離レベル | ダーティリード | ファジーリード(反復不能読み取り) | ファントムリード | シリアライゼーションアノマリー(直列化異常) |
+|------------|----------------|-------------------|------------------|------------|
+| リードアンコミッティド | 許容されるが、PostgreSQLでは発生しない | 可能性あり | 可能性あり | 可能性あり |
+| リードコミッティド | 安全 | 可能性あり | 可能性あり | 可能性あり |
+| リピータブルリード | 安全 | 安全 | 許容されるが、PostgreSQLでは発生しない | 可能性あり |
+| シリアライザブル | 安全 | 安全 | 安全 | 安全 |
 
-現在値確認:
+引用元 : [公式ドキュメント:トランザクションの分離](https://www.postgresql.jp/document/current/html/transaction-iso.html)
+
+## PostgreSQL と MySQL の違い
+
+PostgreSQLはデフォルトが READ COMMITTED。
+MySQL InnoDBはデフォルトが REPEATABLE READ。
+MySQLにはギャップロックがあるが、PostgreSQLにはギャップロックはない。
+
+実行計画におけるロック待ちの可視化（pg_locks / MySQLの performance_schema）
 
 ```sql
 SHOW default_transaction_isolation;
 ```
 
-### 実験 1: READ COMMITTED (再読で値が変わる)
+## READ COMMITTED (再読で値が変わる)
 
-セッションA:
+todo : ファジーリードとファントムリードを確認する手順を記載する
 
-```sql
-BEGIN;
-SELECT balance FROM accounts WHERE name='alice'; -- 100
-```
+## REPEATABLE READ
 
-セッションB:
+todo : ファジーリードとファントムリードを確認する手順を記載する
 
-```sql
-UPDATE accounts SET balance = balance - 10 WHERE name='alice';
-COMMIT; -- 90
-```
+# 2. ロックの種類
 
-セッションA:
+## 主なロックのレベル
 
-```sql
-SELECT balance FROM accounts WHERE name='alice'; -- 90 (変化)
-COMMIT;
-```
+| 種類 | 内容 | 補足 |
+|------|------|------|
+| 排他ロック (eXcluded lock) | ロック対象へのすべてのアクセスを禁止する | SELECT, INSERT, UPDATE, DELETE、すべて実行できない<br>書き込みロック、X lockと呼ばれることもある |
+| 共有ロック (Shared lock) | ロック対象への参照以外のアクセスを禁止する | ほかのトランザクションから参照 (SELECT) でアクセス可能<br>読み込みロック、S lockと呼ばれることもある |
 
-### 実験 2: REPEATABLE READ (再読固定)
+## 主なロックの粒度
 
-セッションA:
+| 種類 | 内容 | 補足 |
+|------|------|------|
+| 表ロック | テーブル（表）を対象にロックするため該当のテーブル内の行はすべて対象になる | テーブルロックと呼ばれることもある |
+| 行ロック | 行単位で対象をロックする。1行の場合もあれば複数行にまたがる場合もあり、すべての行を対象にすると表ロックと同義になる | レコードロックと呼ばれることもある |
 
-```sql
-BEGIN ISOLATION LEVEL REPEATABLE READ;
-SELECT balance FROM accounts WHERE name='bob'; -- 50
-```
-
-セッションB:
-
-```sql
-UPDATE accounts SET balance = balance + 100 WHERE name='bob';
-COMMIT; -- 150
-```
-
-セッションA:
-
-```sql
-SELECT balance FROM accounts WHERE name='bob'; -- 50 (固定)
-COMMIT;
-```
-
-### 実験 3: SERIALIZABLE (競合検出)
-
-同一ロジックを 2 セッション同時実行し、片方で以下が出たら成功:
-
-```text
-ERROR: could not serialize access due to read/write dependencies among transactions
-SQLSTATE: 40001
-```
-
-→ アプリ層で指数バックオフなどのリトライポリシー必須。
-
----
-
-## 2. ロックの種類
-
-### 行ロック (SELECT ... FOR ...)
+## 行ロックの取得
 
 | 句 | 意味 | 主な競合 | 備考 |
 |----|------|----------|------|
@@ -115,19 +71,46 @@ SQLSTATE: 40001
 | FOR SHARE | 共有参照 | FOR UPDATE 系 | 読み + 整合参照 |
 | FOR KEY SHARE | FK 参照保護 | FOR UPDATE | 親行参照維持 |
 
-オプション: NOWAIT (待たず即エラー) / SKIP LOCKED (待たず飛ばす)。
-
-ジョブキュー的取得パターン:
+## skip locked
 
 ```sql
-SELECT id
-FROM accounts
+SELECT id FROM accounts
 WHERE balance > 0
 FOR UPDATE SKIP LOCKED
-LIMIT 5;
+LIMIT 1;
 ```
 
-### 行ロック待ち観察
+## PostgreSQLのデッドロック
+
+```sql
+demo=# BEGIN;
+ BEGIN
+ demo=# SELECT * FROM demo;-- トランザクションB 
+demo=# BEGIN;
+ BEGIN
+ demo=# SELECT * FROM demo;-- トランザクションA 
+demo=# LOCK TABLE demo;
+ LOCK TABLE-- トランザクションB 
+demo=# LOCK TABLE demo;
+ ERROR:  deadlock detected
+ DETAIL:  Process 1979 waits for AccessExclusiveLock on relation 160551 
+of database 160548; blocked by process 1978.
+ Process 1978 waits for AccessExclusiveLock on relation 160551 of 
+database 160548; blocked by process 1979.
+ HINT:  See server log for query details.
+ ```
+
+> 普段MySQLを利用している人からすると驚きだと思いますが、Postgre SQLはSELECTでも「AccessShareLock」という一番小さなレベルのロックを取ります。
+> AccessShareLockはLOCK TABLE実行時に取得するロック「ACCESS EXCLUSIVE」とコンフリクトします
+
+引用元: 失敗から学ぶRDBの正しい歩き方:13章 知らないロック
+
+## PostgreSQLのデッドロックの検出
+
+- [PostgreSQLは雰囲気でデッドロックを殺す](https://soudai.hatenablog.com/entry/2017/12/26/080000)
+- [PostgreSQL Internals](https://www.postgresqlinternals.org/chapter6/)
+
+## 行ロック待ち観察
 
 セッションA:
 
@@ -162,15 +145,6 @@ NOWAIT 例:
 BEGIN; SELECT * FROM accounts WHERE id = 1 FOR UPDATE NOWAIT; -- 即エラー
 ROLLBACK;
 ```
-
-### テーブルロック (代表モード)
-
-| モード | 主用途 | 強く競合する相手 | 備考 |
-|--------|--------|------------------|------|
-| ACCESS SHARE | SELECT | ACCESS EXCLUSIVE | 最軽量 |
-| ROW EXCLUSIVE | 通常 DML | SHARE/ACCESS EXCLUSIVE | INSERT/UPDATE/DELETE |
-| SHARE | CREATE INDEX | ROW EXCLUSIVE | インデックス作成 |
-| ACCESS EXCLUSIVE | ALTER/DROP/VACUUM FULL | 全て | 最強ロック |
 
 ロック状況確認:
 
@@ -258,30 +232,3 @@ INSERT INTO payments(order_id, amount) VALUES (9999, 100); -- 一時不整合許
 INSERT INTO orders(id, user_id, status) VALUES (9999, 1, 'new');
 COMMIT; -- コミット時に一括検証
 ```
-
-落とし穴と回避:
-
-| 問題 | 原因 | 回避 |
-|------|------|------|
-| 子 INSERT が遅い | 親探索フルスキャン | 子側 FK インデックス |
-| NOT NULL + FK 同時付与が長時間 | 全行検証コスト | 先にデータ投入 → 後から制約 |
-| 親大量削除が遅い | 子行存在チェック | 先に子削除 / バッチ |
-
----
-
-### 学習チェックリスト
-
-| 項目 | 自信度 (○/△/×) |
-|------|-----------------|
-| 分離レベル差 (READ COMMITTED vs REPEATABLE READ) を再読で確認 | |
-| SERIALIZABLE 競合 (40001) を発生させた | |
-| 行ロック待ち & NOWAIT / SKIP LOCKED を試した | |
-| ALTER (ADD COLUMN / SET NOT NULL) の影響を観察 | |
-| FK 待ち (親更新 vs 子挿入) を再現 | |
-| DEFERRABLE FK のコミット時検証を体験 | |
-
----
-
-必要になれば拡張版 (MVCC / Vacuum / デッドロック詳細 等) を別資料で参照してください。フィードバック歓迎です。
-| LOCK MODE | 主用途 | 代表的に競合する重いモード |
-
