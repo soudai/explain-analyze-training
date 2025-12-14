@@ -1,17 +1,17 @@
 services:
   postgres:
-    container_name: pg-demo17
-    image: postgres:17
+    container_name: pg-demo18
+    image: postgres:18
     environment:
       TZ: Asia/Tokyo
       POSTGRES_DB: pgdemo
-      POSTGRES_USER: pg-demo17
+      POSTGRES_USER: pg-demo18
       POSTGRES_PASSWORD: pg!!!
       POSTGRES_INITDB_ARGS: --encoding=UTF-8 --locale=C
     ports:
       - "5432:5432"
     volumes:
-      - pg-demo-data:/var/lib/postgresql/data
+      - pg-demo-data:/var/lib/postgresql
   mysql:
     image: mysql:8.4
     container_name: my-demo84
