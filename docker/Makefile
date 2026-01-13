@@ -31,9 +31,15 @@ clean-postgres:
 clean-mysql:
 	-docker volume rm my-demo-data
 
-.PHONY: pg-bash my-bash
+.PHONY: pg-bash my-bash psql mysql
 pg-bash:
 	${EXEC} pg-demo18 bash
 
 my-bash:
 	${EXEC} my-demo84 bash
+
+psql:
+	${EXEC} pg-demo18 psql -U pg-demo18 -d pgdemo
+
+mysql:
+	${EXEC} my-demo84 mysql -uroot -p
