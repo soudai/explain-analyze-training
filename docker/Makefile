@@ -33,7 +33,7 @@ clean-mysql:
 
 .PHONY: pg-bash my-bash
 pg-bash:
-	${EXEC} pg-demo17 bash
+	${EXEC} pg-demo18 bash
 
 my-bash:
 	${EXEC} my-demo84 bash
