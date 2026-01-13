@@ -6,7 +6,7 @@ services:
       TZ: Asia/Tokyo
       POSTGRES_DB: pgdemo
       POSTGRES_USER: pg-demo18
-      POSTGRES_PASSWORD: pg!!!
+      POSTGRES_PASSWORD:  pg!!!
       POSTGRES_INITDB_ARGS: --encoding=UTF-8 --locale=C
     ports:
       - "5432:5432"

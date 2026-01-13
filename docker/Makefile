@@ -1,11 +1,13 @@
-
-
 # コマンド定義
 EXEC=docker exec -it
 
-
 .PHONY: run
-run: up update logs
+run: pull up logs
+
+.PHONY: pull
+
+pull:
+	git pull origin main
 
 .PHONY: up
 up: 
@@ -20,6 +22,7 @@ down:
 	docker compose down
 
 .PHONY: clean clean-postgres clean-mysql
+
 
 clean: down clean-postgres clean-mysql
 
