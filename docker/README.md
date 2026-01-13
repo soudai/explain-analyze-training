@@ -118,3 +118,29 @@ make pg-bash
 - ポート競合（5432/3306 が使用中）:
 	- 既存の DB がホストで動いていないか確認し、必要なら停止してください。
 
+**DDL 取り込み（駐車場設計）**
+- `soudai_ddl.sql` / `ai_ddl.sql` / `ai2_ddl.sql` をそれぞれ別スキーマ（`soudai`, `ai`, `ai2`）に取り込みます。
+
+```bash
+cd ~/work/hft/explain-analyze-training/docker
+make up        # コンテナ起動（未起動の場合）
+make initialize parking
+```
+
+- 実行内容
+	- [src/design_parking/init.sh](docker/src/design_parking/init.sh) を実行
+	- ファイルをコンテナの `/tmp/design_parking` にコピー
+	- `init.sql` を `psql` で実行し、各DDLを対応スキーマへ投入
+
+- 取り込み後の確認例
+
+```bash
+# スキーマ一覧確認
+make psql
+\dn
+
+# テーブル一覧（例: soudai スキーマ）
+set search_path to soudai, public;
+\dt
+```
+
