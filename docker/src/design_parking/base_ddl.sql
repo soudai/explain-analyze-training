@@ -40,10 +40,10 @@ CREATE TABLE contracts (
     parking_space_id SMALLINT  NOT NULL REFERENCES parking_spaces(id) ON DELETE RESTRICT,
     customer_id      UUID      NOT NULL REFERENCES customers(id)      ON DELETE RESTRICT,
     vehicle_id       UUID      NOT NULL REFERENCES vehicles(id)       ON DELETE RESTRICT,
-    start_date       DATE      NOT NULL
-        CHECK (date_trunc('month', start_date) = start_date),          -- 必ず月初
+    begin_date       DATE      NOT NULL
+        CHECK (date_trunc('month', begin_date) = begin_date),          -- 必ず月初
     end_date         DATE
-        CHECK (end_date IS NULL OR end_date >= start_date),
+        CHECK (end_date IS NULL OR end_date >= begin_date),
     monthly_fee      NUMERIC(10,2) NOT NULL CHECK (monthly_fee > 0),   -- 契約締結時にコピー
     created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
