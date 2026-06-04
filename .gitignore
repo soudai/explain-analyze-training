@@ -1,1 +1,25 @@
 .idea/
+
+# Python / Django generated files
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+*.log
+
+# Local Python environments
+.venv/
+venv/
+env/
+
+# Local Django/runtime files
+db.sqlite3
+*.sqlite3
+staticfiles/
+media/
+
+# Local environment files
+.env
+.env.*

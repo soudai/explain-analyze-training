@@ -1,0 +1,47 @@
+services:
+  db:
+    image: postgres:18
+    container_name: django-sample-db
+    environment:
+      POSTGRES_DB: django_sample
+      POSTGRES_USER: django_user
+      POSTGRES_PASSWORD: django_pass
+      TZ: Asia/Tokyo
+    ports:
+      - "5433:5432"
+    volumes:
+      - django-sample-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U django_user -d django_sample"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: django-sample-web
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DJANGO_SECRET_KEY: dev-secret-key
+      DJANGO_DEBUG: "1"
+      DJANGO_ALLOWED_HOSTS: "*"
+      POSTGRES_DB: django_sample
+      POSTGRES_USER: django_user
+      POSTGRES_PASSWORD: django_pass
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+      TZ: Asia/Tokyo
+    ports:
+      - "8000:8000"
+    command: >
+      sh -c "python manage.py migrate
+      && python manage.py load_sample_data
+      && python manage.py runserver 0.0.0.0:8000"
+
+volumes:
+  django-sample-pgdata:
+    name: django-sample-pgdata
