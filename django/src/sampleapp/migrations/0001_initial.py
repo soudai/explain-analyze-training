@@ -2,6 +2,7 @@ import django.contrib.postgres.fields
 import django.contrib.postgres.indexes
 import django.contrib.postgres.operations
 import django.db.models.deletion
+import pgvector.django
 from django.contrib.postgres.constraints import ExclusionConstraint
 from django.contrib.postgres.fields import RangeOperators
 from django.db import migrations, models
@@ -15,6 +16,7 @@ class Migration(migrations.Migration):
 
     operations = [
         django.contrib.postgres.operations.BtreeGistExtension(),
+        pgvector.django.VectorExtension(),
         migrations.CreateModel(
             name="Article",
             fields=[
@@ -84,6 +86,26 @@ class Migration(migrations.Migration):
                 ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
                 ("number", models.CharField(max_length=20, unique=True)),
             ],
+        ),
+        migrations.CreateModel(
+            name="KnowledgeEntry",
+            fields=[
+                ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                ("title", models.CharField(max_length=200)),
+                ("content", models.TextField()),
+                ("embedding", pgvector.django.VectorField(dimensions=3)),
+            ],
+            options={
+                "indexes": [
+                    pgvector.django.HnswIndex(
+                        ef_construction=64,
+                        fields=["embedding"],
+                        m=16,
+                        name="knowledge_embedding_hnsw",
+                        opclasses=["vector_l2_ops"],
+                    )
+                ],
+            },
         ),
         migrations.CreateModel(
             name="WebhookEvent",

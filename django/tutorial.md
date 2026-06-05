@@ -1,0 +1,1131 @@
+# Django PostgreSQL Sample Tutorial 実行ログ
+
+このファイルは `README.md` のサンプル実行コマンドと、現在の Docker 環境で取得した実行結果を抜き出したものです。
+
+実行確認日: 2026-06-05
+
+## 1. Docker Compose を確認する
+
+```bash
+docker compose version
+```
+
+実行結果:
+
+```text
+Docker Compose version v5.0.2
+```
+
+## 2. サンプルを起動する
+
+```bash
+cd django
+docker compose up --build -d
+```
+
+実行結果:
+
+```text
+Image django-web Building
+#1 [internal] load local bake definitions
+#1 DONE 0.0s
+#2 [internal] load build definition from Dockerfile
+#2 DONE 0.0s
+#3 [internal] load metadata for docker.io/library/python:3.12-slim
+#3 DONE 1.8s
+#4 [internal] load .dockerignore
+#4 DONE 0.0s
+#5 [1/7] FROM docker.io/library/python:3.12-slim@sha256:090ba77e2958f6af52a5341f788b50b032dd4ca28377d2893dcf1ecbdfdfe203
+#5 DONE 0.0s
+#6 [internal] load build context
+#6 DONE 0.0s
+#7 [2/7] WORKDIR /app
+#7 CACHED
+#8 [4/7] COPY requirements.txt .
+#8 CACHED
+#9 [5/7] RUN pip install --no-cache-dir -r requirements.txt
+#9 CACHED
+#10 [6/7] COPY src /app/src
+#10 CACHED
+#11 [3/7] RUN apt-get update     && apt-get install -y --no-install-recommends gcc libpq-dev     && rm -rf /var/lib/apt/lists/*
+#11 CACHED
+#12 [7/7] WORKDIR /app/src
+#12 CACHED
+#13 exporting to image
+#13 DONE 0.3s
+#14 resolving provenance for metadata file
+#14 DONE 0.0s
+Image django-web Built
+Container django-sample-db Running
+Container django-sample-web Recreate
+Container django-sample-web Recreated
+Container django-sample-db Waiting
+Container django-sample-db Healthy
+Container django-sample-web Starting
+Container django-sample-web Started
+```
+
+## 3. コンテナ状態を確認する
+
+```bash
+docker compose ps
+```
+
+実行結果:
+
+```text
+NAME                IMAGE                    COMMAND                  SERVICE   CREATED          STATUS                    PORTS
+django-sample-db    pgvector/pgvector:pg18   "docker-entrypoint.s…"   db        21 minutes ago   Up 21 minutes (healthy)   0.0.0.0:5433->5432/tcp, [::]:5433->5432/tcp
+django-sample-web   django-web               "sh -c 'python manag…"   web       11 seconds ago   Up 9 seconds              0.0.0.0:8000->8000/tcp, [::]:8000->8000/tcp
+```
+
+## 4. 起動ログを確認する
+
+```bash
+docker compose logs web
+```
+
+実行結果:
+
+```text
+django-sample-web  | Operations to perform:
+django-sample-web  |   Apply all migrations: admin, auth, contenttypes, sampleapp, sessions
+django-sample-web  | Running migrations:
+django-sample-web  |   No migrations to apply.
+django-sample-web  | Sample data loaded
+django-sample-web  | Watching for file changes with StatReloader
+django-sample-web  | Performing system checks...
+django-sample-web  |
+django-sample-web  | System check identified no issues (0 silenced).
+django-sample-web  | June 05, 2026 - 11:06:55
+django-sample-web  | Django version 5.2.15, using settings 'config.settings'
+django-sample-web  | Starting development server at http://0.0.0.0:8000/
+django-sample-web  | Quit the server with CONTROL-C.
+```
+
+## 5. ヘルスチェックを確認する
+
+```bash
+curl http://localhost:8000/
+```
+
+実行結果:
+
+```json
+{"status": "ok"}
+```
+
+## 6. 記事サンプルの結果を確認する
+
+```bash
+curl http://localhost:8000/sample/
+```
+
+実行結果:
+
+```json
+{
+  "jsonfield": {
+    "paid_events_count": 1,
+    "customer_events_count": 1,
+    "livemode_events_count": 1,
+    "events_with_customer_count": 2
+  },
+  "arrayfield": {
+    "contains_postgresql": [
+      "PostgreSQL and Django"
+    ],
+    "overlap_django_or_postgresql": [
+      "PostgreSQL and Django",
+      "Only Django",
+      "Django full text search"
+    ]
+  },
+  "rangefield": {
+    "active_campaigns": [
+      "Now Active Campaign"
+    ]
+  },
+  "pgvector": {
+    "query_embedding": [
+      0.9,
+      0.1,
+      0.2
+    ],
+    "nearest_chunks": [
+      {
+        "title": "JSONField and jsonb",
+        "distance": 0.0
+      },
+      {
+        "title": "pgvector for RAG",
+        "distance": 0.004004
+      }
+    ]
+  },
+  "constraints": {
+    "reservation_overlap_blocked": true,
+    "duplicate_draft_blocked": true
+  }
+}
+```
+
+## 7. PostgreSQL と拡張を確認する
+
+```bash
+docker compose exec db psql -At -U django_user -d django_sample -c "select 'server_version=' || version(); select 'extensions=' || string_agg(extname, ',' order by extname) from pg_extension where extname in ('btree_gist','pg_trgm','vector');"
+```
+
+実行結果:
+
+```text
+server_version=PostgreSQL 18.4 (Debian 18.4-1.pgdg12+1) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0, 64-bit
+extensions=btree_gist,pg_trgm,vector
+```
+
+## 8. DB 定義を確認する
+
+```bash
+docker compose exec db psql -U django_user -d django_sample
+```
+
+### JSONField
+
+```sql
+\d sampleapp_webhookevent
+```
+
+実行結果:
+
+```text
+                              Table "public.sampleapp_webhookevent"
+   Column   |           Type           | Collation | Nullable |             Default
+------------+--------------------------+-----------+----------+----------------------------------
+ id         | bigint                   |           | not null | generated by default as identity
+ provider   | character varying(50)    |           | not null |
+ event_type | character varying(100)   |           | not null |
+ payload    | jsonb                    |           | not null |
+ created_at | timestamp with time zone |           | not null |
+Indexes:
+    "sampleapp_webhookevent_pkey" PRIMARY KEY, btree (id)
+    "webhook_payload_path_gin" gin (payload jsonb_path_ops)
+```
+
+### ArrayField
+
+```sql
+\d sampleapp_article
+```
+
+実行結果:
+
+```text
+                              Table "public.sampleapp_article"
+ Column |          Type           | Collation | Nullable |             Default
+--------+-------------------------+-----------+----------+----------------------------------
+ id     | bigint                  |           | not null | generated by default as identity
+ title  | character varying(200)  |           | not null |
+ body   | text                    |           | not null |
+ tags   | character varying(50)[] |           | not null |
+Indexes:
+    "sampleapp_article_pkey" PRIMARY KEY, btree (id)
+    "article_tags_gin" gin (tags)
+```
+
+### RangeField
+
+```sql
+\d sampleapp_campaign
+```
+
+実行結果:
+
+```text
+                                Table "public.sampleapp_campaign"
+    Column     |          Type          | Collation | Nullable |             Default
+---------------+------------------------+-----------+----------+----------------------------------
+ id            | bigint                 |           | not null | generated by default as identity
+ name          | character varying(200) |           | not null |
+ active_period | tstzrange              |           | not null |
+Indexes:
+    "sampleapp_campaign_pkey" PRIMARY KEY, btree (id)
+    "campaign_active_period_gist" gist (active_period)
+```
+
+### pgvector
+
+```sql
+\d sampleapp_ragchunk
+```
+
+実行結果:
+
+```text
+                                Table "public.sampleapp_ragchunk"
+   Column   |           Type           | Collation | Nullable |             Default
+------------+--------------------------+-----------+----------+----------------------------------
+ id         | bigint                   |           | not null | generated by default as identity
+ source     | character varying(200)   |           | not null |
+ title      | character varying(200)   |           | not null |
+ body       | text                     |           | not null |
+ embedding  | vector(3)                |           | not null |
+ created_at | timestamp with time zone |           | not null |
+Indexes:
+    "sampleapp_ragchunk_pkey" PRIMARY KEY, btree (id)
+    "rag_chunk_embedding_hnsw" hnsw (embedding vector_cosine_ops) WITH (m='16', ef_construction='64')
+```
+
+### ExclusionConstraint
+
+```sql
+\d sampleapp_reservation
+```
+
+実行結果:
+
+```text
+                      Table "public.sampleapp_reservation"
+  Column   |   Type    | Collation | Nullable |             Default
+-----------+-----------+-----------+----------+----------------------------------
+ id        | bigint    |           | not null | generated by default as identity
+ timespan  | tstzrange |           | not null |
+ cancelled | boolean   |           | not null |
+ room_id   | bigint    |           | not null |
+Indexes:
+    "sampleapp_reservation_pkey" PRIMARY KEY, btree (id)
+    "exclude_overlapping_reservations" EXCLUDE USING gist (timespan WITH &&, room_id WITH =) WHERE (NOT cancelled)
+    "sampleapp_reservation_room_id_df694ea5" btree (room_id)
+Foreign-key constraints:
+    "sampleapp_reservation_room_id_df694ea5_fk_sampleapp_room_id" FOREIGN KEY (room_id) REFERENCES sampleapp_room(id) DEFERRABLE INITIALLY DEFERRED
+```
+
+### UniqueConstraint と CheckConstraint
+
+```sql
+\d sampleapp_draftarticle
+```
+
+実行結果:
+
+```text
+                           Table "public.sampleapp_draftarticle"
+ Column  |          Type          | Collation | Nullable |             Default
+---------+------------------------+-----------+----------+----------------------------------
+ id      | bigint                 |           | not null | generated by default as identity
+ user_id | bigint                 |           | not null |
+ status  | character varying(20)  |           | not null |
+ title   | character varying(200) |           | not null |
+Indexes:
+    "sampleapp_draftarticle_pkey" PRIMARY KEY, btree (id)
+    "unique_draft_article_per_user" UNIQUE, btree (user_id) WHERE status::text = 'draft'::text
+Check constraints:
+    "draft_article_valid_status" CHECK (status::text = ANY (ARRAY['draft'::character varying, 'published'::character varying, 'archived'::character varying]::text[]))
+```
+
+## 9. 実行計画を確認する
+
+### JSONField
+
+```sql
+EXPLAIN
+SELECT id
+FROM sampleapp_webhookevent
+WHERE payload @> '{"livemode": true}'::jsonb;
+```
+
+実行結果:
+
+```text
+                              QUERY PLAN
+-----------------------------------------------------------------------
+ Seq Scan on sampleapp_webhookevent  (cost=0.00..1.02 rows=1 width=8)
+   Filter: (payload @> '{"livemode": true}'::jsonb)
+(2 rows)
+```
+
+### ArrayField
+
+```sql
+EXPLAIN
+SELECT id
+FROM sampleapp_article
+WHERE tags @> ARRAY['postgresql']::varchar(50)[];
+```
+
+実行結果:
+
+```text
+                            QUERY PLAN
+------------------------------------------------------------------
+ Seq Scan on sampleapp_article  (cost=0.00..1.02 rows=1 width=8)
+   Filter: (tags @> '{postgresql}'::character varying(50)[])
+(2 rows)
+```
+
+### RangeField
+
+```sql
+EXPLAIN
+SELECT id
+FROM sampleapp_campaign
+WHERE active_period @> now();
+```
+
+実行結果:
+
+```text
+                            QUERY PLAN
+------------------------------------------------------------------
+ Seq Scan on sampleapp_campaign  (cost=0.00..1.01 rows=1 width=8)
+   Filter: (active_period @> now())
+(2 rows)
+```
+
+### pgvector
+
+```sql
+EXPLAIN
+SELECT id, title
+FROM sampleapp_ragchunk
+ORDER BY embedding <=> '[0.9,0.1,0.2]'::vector
+LIMIT 2;
+```
+
+実行結果:
+
+```text
+                                                 QUERY PLAN
+-------------------------------------------------------------------------------------------------------------
+ Limit  (cost=8.60..9.62 rows=2 width=434)
+   ->  Index Scan using rag_chunk_embedding_hnsw on sampleapp_ragchunk  (cost=8.60..49.60 rows=80 width=434)
+         Order By: (embedding <=> '[0.9,0.1,0.2]'::vector)
+(3 rows)
+```
+
+### EXPLAIN ANALYZE
+
+```sql
+ANALYZE;
+
+EXPLAIN (ANALYZE, BUFFERS)
+SELECT id
+FROM sampleapp_webhookevent
+WHERE payload @> '{"livemode": true}'::jsonb;
+```
+
+実行結果:
+
+```text
+ANALYZE
+                                                    QUERY PLAN
+-------------------------------------------------------------------------------------------------------------------
+ Seq Scan on sampleapp_webhookevent  (cost=0.00..1.04 rows=1 width=8) (actual time=0.007..0.008 rows=1.00 loops=1)
+   Filter: (payload @> '{"livemode": true}'::jsonb)
+   Rows Removed by Filter: 2
+   Buffers: shared hit=1
+ Planning:
+   Buffers: shared hit=32
+ Planning Time: 0.104 ms
+ Execution Time: 0.026 ms
+(8 rows)
+```
+
+## 10. 制約が効いていることを確認する
+
+`/sample/` の `constraints` が両方 `true` になっていることを確認します。
+
+```json
+{
+  "constraints": {
+    "reservation_overlap_blocked": true,
+    "duplicate_draft_blocked": true
+  }
+}
+```
+
+## 11. memo.md のサンプルを SQL で実行する
+
+ここでは、Django ORM で確認している内容を SQL として直接実行します。
+
+まず、検証用データの件数を確認します。
+
+```sql
+select 'webhook_events=' || count(*) from sampleapp_webhookevent;
+select 'campaigns=' || count(*) from sampleapp_campaign;
+select 'reservations=' || count(*) from sampleapp_reservation;
+select 'draft_articles=' || count(*) from sampleapp_draftarticle;
+```
+
+実行結果:
+
+```text
+webhook_events=3
+campaigns=2
+reservations=2
+draft_articles=2
+```
+
+### JSONField の SQL
+
+`provider` と `event_type` で絞り込み、JSON 内の値を取り出します。
+
+```sql
+SELECT event_type,
+       payload #>> '{customer,id}' AS customer_id,
+       payload->>'livemode' AS livemode
+FROM sampleapp_webhookevent
+WHERE provider = 'stripe'
+  AND event_type = 'invoice.paid';
+```
+
+実行結果:
+
+```text
+  event_type  | customer_id | livemode
+--------------+-------------+----------
+ invoice.paid | cus_123     | true
+(1 row)
+```
+
+ネストした JSON キーで検索します。
+
+```sql
+SELECT provider, event_type
+FROM sampleapp_webhookevent
+WHERE payload #>> '{customer,id}' = 'cus_123';
+```
+
+実行結果:
+
+```text
+ provider |  event_type
+----------+--------------
+ stripe   | invoice.paid
+(1 row)
+```
+
+JSON 包含検索を実行します。
+
+```sql
+SELECT provider, event_type
+FROM sampleapp_webhookevent
+WHERE payload @> '{"livemode": true}'::jsonb;
+```
+
+実行結果:
+
+```text
+ provider |  event_type
+----------+--------------
+ stripe   | invoice.paid
+(1 row)
+```
+
+JSON キーの存在を検索します。
+
+```sql
+SELECT provider, event_type
+FROM sampleapp_webhookevent
+WHERE payload ? 'customer'
+ORDER BY id;
+```
+
+実行結果:
+
+```text
+ provider |   event_type
+----------+-----------------
+ stripe   | invoice.paid
+ stripe   | invoice.created
+(2 rows)
+```
+
+`customer` キーを持たない検証用データも確認できます。
+
+```sql
+SELECT provider, event_type
+FROM sampleapp_webhookevent
+WHERE NOT (payload ? 'customer')
+ORDER BY id;
+```
+
+実行結果:
+
+```text
+ provider | event_type
+----------+------------
+ github   | push
+(1 row)
+```
+
+### ArrayField の SQL
+
+配列が `postgresql` を含む行を検索します。
+
+```sql
+SELECT title, tags
+FROM sampleapp_article
+WHERE tags @> ARRAY['postgresql']::varchar(50)[]
+ORDER BY id;
+```
+
+実行結果:
+
+```text
+         title         |        tags
+-----------------------+---------------------
+ PostgreSQL and Django | {postgresql,django}
+(1 row)
+```
+
+配列が `django` または `postgresql` と重なる行を検索します。
+
+```sql
+SELECT title, tags
+FROM sampleapp_article
+WHERE tags && ARRAY['django','postgresql']::varchar(50)[]
+ORDER BY id;
+```
+
+実行結果:
+
+```text
+         title         |        tags
+-----------------------+---------------------
+ PostgreSQL and Django | {postgresql,django}
+ Only Django           | {django}
+(2 rows)
+```
+
+### RangeField の SQL
+
+現在時刻を含む期間かどうかを確認します。
+
+```sql
+SELECT name, active_period @> now() AS active_now
+FROM sampleapp_campaign
+ORDER BY name;
+```
+
+実行結果:
+
+```text
+        name         | active_now
+---------------------+------------
+ Expired Campaign    | f
+ Now Active Campaign | t
+(2 rows)
+```
+
+### pgvector の SQL
+
+cosine 距離が近い順に検索します。
+
+```sql
+SELECT title,
+       round((embedding <=> '[0.9,0.1,0.2]'::vector)::numeric, 6) AS cosine_distance
+FROM sampleapp_ragchunk
+ORDER BY embedding <=> '[0.9,0.1,0.2]'::vector
+LIMIT 3;
+```
+
+実行結果:
+
+```text
+         title          | cosine_distance
+------------------------+-----------------
+ JSONField and jsonb    |        0.000000
+ pgvector for RAG       |        0.004004
+ PostgreSQL range types |        0.618754
+(3 rows)
+```
+
+### 制約の SQL
+
+`cancelled = true` の予約は同じ時間帯でも保存でき、`cancelled = false` の重複予約は `ExclusionConstraint` で拒否されます。
+
+```sql
+SELECT room.number,
+       lower(reservation.timespan) AS starts_at,
+       upper(reservation.timespan) AS ends_at,
+       reservation.cancelled
+FROM sampleapp_reservation reservation
+JOIN sampleapp_room room ON room.id = reservation.room_id
+ORDER BY reservation.cancelled, reservation.id;
+```
+
+実行結果:
+
+```text
+ number |       starts_at        |        ends_at         | cancelled
+--------+------------------------+------------------------+-----------
+ A-101  | 2026-06-05 00:00:00+09 | 2026-06-06 00:00:00+09 | f
+ A-101  | 2026-06-05 00:00:00+09 | 2026-06-06 00:00:00+09 | t
+(2 rows)
+```
+
+同じユーザーでも `published` は保存でき、`draft` の重複だけが `UniqueConstraint(condition=...)` で拒否されます。
+
+```sql
+SELECT user_id, status, title
+FROM sampleapp_draftarticle
+ORDER BY status;
+```
+
+実行結果:
+
+```text
+ user_id |  status   |       title
+---------+-----------+-------------------
+       1 | draft     | first draft
+       1 | published | published article
+(2 rows)
+```
+
+実際に制約違反になる INSERT を試し、例外を捕まえて確認します。
+
+```sql
+DO $$
+DECLARE
+    reservation_overlap_blocked boolean := false;
+    duplicate_draft_blocked boolean := false;
+BEGIN
+    BEGIN
+        INSERT INTO sampleapp_reservation (room_id, timespan, cancelled)
+        SELECT id,
+               tstzrange(date_trunc('day', now()), date_trunc('day', now()) + interval '1 day', '[)'),
+               false
+        FROM sampleapp_room
+        WHERE number = 'A-101';
+    EXCEPTION WHEN exclusion_violation THEN
+        reservation_overlap_blocked := true;
+    END;
+
+    BEGIN
+        INSERT INTO sampleapp_draftarticle (user_id, status, title)
+        VALUES (1, 'draft', 'duplicate draft from sql');
+    EXCEPTION WHEN unique_violation THEN
+        duplicate_draft_blocked := true;
+    END;
+
+    RAISE NOTICE 'reservation_overlap_blocked=%', reservation_overlap_blocked;
+    RAISE NOTICE 'duplicate_draft_blocked=%', duplicate_draft_blocked;
+END $$;
+```
+
+実行結果:
+
+```text
+NOTICE:  reservation_overlap_blocked=t
+NOTICE:  duplicate_draft_blocked=t
+DO
+```
+
+制約違反の INSERT は保存されていないため、件数は変わりません。
+
+```sql
+select 'reservations=' || count(*) from sampleapp_reservation;
+select 'draft_articles=' || count(*) from sampleapp_draftarticle;
+```
+
+実行結果:
+
+```text
+reservations=2
+draft_articles=2
+```
+
+### 拡張機能の SQL
+
+`BtreeGistExtension()`、`TrigramExtension()`、`VectorExtension()` に対応する拡張が有効になっていることを確認します。
+
+```sql
+select 'extensions=' || string_agg(extname, ',' order by extname)
+from pg_extension
+where extname in ('btree_gist','pg_trgm','vector');
+```
+
+実行結果:
+
+```text
+extensions=btree_gist,pg_trgm,vector
+```
+
+### Key-Value データの JSONField SQL
+
+`ProductAttribute.attrs` の `color` が `red` の商品を検索します。
+
+```sql
+SELECT sku, attrs
+FROM sampleapp_productattribute
+WHERE attrs -> 'color' = '"red"'::jsonb;
+```
+
+実行結果:
+
+```text
+    sku    |                        attrs
+-----------+-----------------------------------------------------
+ SKU-RED-M | {"size": "M", "color": "red", "material": "cotton"}
+(1 row)
+```
+
+複数属性を JSON 包含検索でまとめて指定します。
+
+```sql
+SELECT sku, attrs
+FROM sampleapp_productattribute
+WHERE attrs @> '{"color": "red", "size": "M"}'::jsonb;
+```
+
+実行結果:
+
+```text
+    sku    |                        attrs
+-----------+-----------------------------------------------------
+ SKU-RED-M | {"size": "M", "color": "red", "material": "cotton"}
+(1 row)
+```
+
+### UNIQUE NULLS NOT DISTINCT の SQL
+
+`tenant_id` と `external_id` の組み合わせを確認します。
+
+```sql
+SELECT tenant_id, external_id
+FROM sampleapp_externalaccount
+ORDER BY tenant_id, external_id NULLS FIRST;
+```
+
+実行結果:
+
+```text
+ tenant_id | external_id
+-----------+-------------
+         1 |
+         1 | acct_123
+         2 |
+(3 rows)
+```
+
+同じテナントで `external_id IS NULL` の2件目を入れようとすると、`UNIQUE NULLS NOT DISTINCT` により拒否されます。
+
+```sql
+DO $$
+DECLARE
+    duplicate_null_blocked boolean := false;
+BEGIN
+    BEGIN
+        INSERT INTO sampleapp_externalaccount (tenant_id, external_id)
+        VALUES (1, NULL);
+    EXCEPTION WHEN unique_violation THEN
+        duplicate_null_blocked := true;
+    END;
+
+    RAISE NOTICE 'duplicate_null_blocked=%', duplicate_null_blocked;
+END $$;
+```
+
+実行結果:
+
+```text
+NOTICE:  duplicate_null_blocked=t
+DO
+```
+
+### 部分インデックス、関数インデックス、カバリングインデックスの SQL
+
+削除済みでない顧客だけを対象に検索します。
+
+```sql
+SELECT email, name
+FROM sampleapp_customer
+WHERE email = 'alice@example.com'
+  AND deleted_at IS NULL
+LIMIT 21;
+```
+
+実行結果:
+
+```text
+       email       | name
+-------------------+-------
+ alice@example.com | Alice
+(1 row)
+```
+
+`LOWER(email)` の式に合わせて、大文字小文字を無視する検索を実行します。
+
+```sql
+SELECT email, name
+FROM sampleapp_customer
+WHERE lower(email) = 'alice@example.com'
+LIMIT 21;
+```
+
+実行結果:
+
+```text
+       email       | name
+-------------------+-------
+ alice@example.com | Alice
+(1 row)
+```
+
+カバリングインデックスの例と同じく、`email` で検索して `email` と `name` を返します。
+
+```sql
+SELECT email, name
+FROM sampleapp_customer
+WHERE email = 'alice@example.com';
+```
+
+実行結果:
+
+```text
+       email       | name
+-------------------+-------
+ alice@example.com | Alice
+(1 row)
+```
+
+### 全文検索の SQL
+
+`SearchVector("title") + SearchVector("body")` に相当する式で検索します。
+
+```sql
+SELECT title,
+       round(
+         ts_rank(
+           setweight(to_tsvector('english', coalesce(title, '')), 'A') ||
+           setweight(to_tsvector('english', coalesce(body, '')), 'B'),
+           plainto_tsquery('english', 'search')
+         )::numeric,
+         6
+       ) AS rank
+FROM sampleapp_article
+WHERE (
+    setweight(to_tsvector('english', coalesce(title, '')), 'A') ||
+    setweight(to_tsvector('english', coalesce(body, '')), 'B')
+) @@ plainto_tsquery('english', 'search')
+ORDER BY rank DESC;
+```
+
+実行結果:
+
+```text
+          title          |   rank
+-------------------------+----------
+ Django full text search | 0.668720
+(1 row)
+```
+
+### Trigram 類似検索の SQL
+
+`TrigramSimilarity("title", keyword)` に相当する `similarity()` を実行します。
+
+```sql
+SELECT title,
+       round(similarity(title, 'Django fulltext search')::numeric, 3) AS similarity
+FROM sampleapp_article
+WHERE similarity(title, 'Django fulltext search') > 0.2
+ORDER BY similarity DESC;
+```
+
+実行結果:
+
+```text
+          title          | similarity
+-------------------------+------------
+ Django full text search |      0.808
+ Only Django             |      0.250
+(2 rows)
+```
+
+### 部分一致検索の SQL
+
+`body__contains=keyword` に相当する `LIKE` を実行します。
+
+```sql
+SELECT title
+FROM sampleapp_article
+WHERE body LIKE '%' || 'SearchVector' || '%';
+```
+
+実行結果:
+
+```text
+          title
+-------------------------
+ Django full text search
+(1 row)
+```
+
+### SKIP LOCKED の SQL
+
+未処理ジョブを1件だけロックして取得します。
+ここでは確認だけなので、最後に `ROLLBACK` しています。
+
+```sql
+BEGIN;
+
+SELECT id, status, payload
+FROM sampleapp_importjob
+WHERE status = 'pending'
+ORDER BY id ASC
+LIMIT 1
+FOR UPDATE SKIP LOCKED;
+
+ROLLBACK;
+```
+
+実行結果:
+
+```text
+BEGIN
+ id | status  |       payload
+----+---------+----------------------
+  1 | pending | {"name": "import-1"}
+(1 row)
+
+ROLLBACK
+```
+
+### パーティショニングの SQL
+
+`EventLog` の月次パーティションに入れたデータを検索します。
+
+```sql
+SELECT id, occurred_at, tenant_id, payload
+FROM event_log
+WHERE tenant_id = 1
+  AND occurred_at >= '2026-06-01'::timestamptz
+  AND occurred_at < '2026-07-01'::timestamptz
+ORDER BY occurred_at ASC;
+```
+
+実行結果:
+
+```text
+                  id                  |      occurred_at       | tenant_id |                       payload
+--------------------------------------+------------------------+-----------+-----------------------------------------------------
+ 00000000-0000-0000-0000-000000000001 | 2026-06-05 10:00:00+09 |         1 | {"event": "memo_sample", "feature": "partitioning"}
+(1 row)
+```
+
+実行計画では、親テーブルではなく `event_log_2026_06` パーティションが参照されます。
+
+```sql
+EXPLAIN
+SELECT id
+FROM event_log
+WHERE tenant_id = 1
+  AND occurred_at >= '2026-06-01'::timestamptz
+  AND occurred_at < '2026-07-01'::timestamptz;
+```
+
+実行結果:
+
+```text
+                                                                                 QUERY PLAN
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Seq Scan on event_log_2026_06 event_log  (cost=0.00..25.40 rows=1 width=16)
+   Filter: ((occurred_at >= '2026-06-01 00:00:00+09'::timestamp with time zone) AND (occurred_at < '2026-07-01 00:00:00+09'::timestamp with time zone) AND (tenant_id = 1))
+(2 rows)
+```
+
+### pgvector RAG サンプルの SQL
+
+`CosineDistance("embedding", query_embedding)` に相当する `<=>` で距離順に検索します。
+実サンプルでは読みやすさのため、1536次元ではなく3次元の embedding を使っています。
+
+```sql
+SELECT title,
+       round((embedding <=> '[0.9,0.1,0.2]'::vector)::numeric, 6) AS cosine_distance
+FROM sampleapp_ragchunk
+ORDER BY embedding <=> '[0.9,0.1,0.2]'::vector
+LIMIT 3;
+```
+
+実行結果:
+
+```text
+         title          | cosine_distance
+------------------------+-----------------
+ JSONField and jsonb    |        0.000000
+ pgvector for RAG       |        0.004004
+ PostgreSQL range types |        0.618754
+(3 rows)
+```
+
+### MERGE の SQL
+
+MERGE 前の在庫データです。
+
+```sql
+SELECT sku, quantity
+FROM sampleapp_stock
+ORDER BY sku;
+```
+
+実行結果:
+
+```text
+  sku  | quantity
+-------+----------
+ A-001 |       10
+ B-002 |        3
+(2 rows)
+```
+
+`A-001` は更新、`B-002` は削除、`C-003` は追加します。
+
+```sql
+MERGE INTO sampleapp_stock AS target
+USING (
+    VALUES
+      ('A-001', 12, now()),
+      ('B-002', 0, now()),
+      ('C-003', 5, now())
+) AS source(sku, quantity, seen_at)
+ON target.sku = source.sku
+WHEN MATCHED AND source.quantity = 0 THEN
+  DELETE
+WHEN MATCHED THEN
+  UPDATE SET
+    quantity = source.quantity,
+    seen_at = source.seen_at
+WHEN NOT MATCHED AND source.quantity > 0 THEN
+  INSERT (sku, quantity, seen_at)
+  VALUES (source.sku, source.quantity, source.seen_at);
+
+SELECT sku, quantity
+FROM sampleapp_stock
+ORDER BY sku;
+```
+
+実行結果:
+
+```text
+MERGE 3
+  sku  | quantity
+-------+----------
+ A-001 |       12
+ C-003 |        5
+(2 rows)
+```
+
+## 12. 停止する
+
+以下は環境を停止するコマンドです。
+この tutorial 作成時には、現在の Docker 環境を維持するため実行していません。
+
+```bash
+docker compose down
+```
+
+DB ボリュームも削除して最初からやり直す場合:
+
+```bash
+docker compose down -v
+```

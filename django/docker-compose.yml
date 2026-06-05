@@ -1,6 +1,6 @@
 services:
   db:
-    image: postgres:18
+    image: pgvector/pgvector:pg18
     container_name: django-sample-db
     environment:
       POSTGRES_DB: django_sample
@@ -10,7 +10,7 @@ services:
     ports:
       - "5433:5432"
     volumes:
-      - django-sample-pgdata:/var/lib/postgresql/data
+      - django-sample-pgdata:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U django_user -d django_sample"]
       interval: 5s
