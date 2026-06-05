@@ -190,6 +190,7 @@ class Command(BaseCommand):
             defaults={"started_at": now},
         )
 
+        Stock.objects.exclude(sku__in=["A-001", "B-002"]).delete()
         Stock.objects.update_or_create(
             sku="A-001",
             defaults={"quantity": 10, "seen_at": now},

@@ -1,8 +1,11 @@
 # Django PostgreSQL Sample Tutorial 実行ログ
 
-このファイルは `README.md` のサンプル実行コマンドと、現在の Docker 環境で取得した実行結果を抜き出したものです。
+このファイルは、公開記事「[Djangoで便利なPostgreSQLの活用方法](https://soudai.hatenablog.com/entry/2026/06/05/153530)」で紹介している `django/` サンプルプロジェクトの実行コマンドと、現在の Docker 環境で取得した実行結果をまとめたものです。
 
 実行確認日: 2026-06-05
+
+この Docker サンプルでは、標準の PostgreSQL + pgvector イメージで検証できる内容を扱います。
+PostGIS、`pg_bigm`、`CREATE INDEX CONCURRENTLY` の本番運用例は記事本文の説明対象ですが、この tutorial では実行ログには含めていません。
 
 ## 1. Docker Compose を確認する
 
